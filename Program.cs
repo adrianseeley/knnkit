@@ -550,10 +550,10 @@ public static class Optimize
                     foreach (Aggregate.AggregateFunction aggregateFunction in Aggregate.AggregateFunctions)
                     {
                         // track predictions for each k value
-                        List<List<float[]>> kPredictions = new List<List<float[]>>(ks.Count);
+                        List<float[]>[] kPredictions = new List<float[]>[ks.Count];
                         for (int kIndex = 0; kIndex < ks.Count; kIndex++)
                         {
-                            kPredictions.Add(new List<float[]>(nSamples.Count));
+                            kPredictions[kIndex] = new List<float[]>(nSamples.Count);
                         }
 
                         // iterate through samples
