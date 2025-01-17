@@ -12,13 +12,13 @@
 
 public static class FeatureReduction
 {
-    public static List<int> Homogeneous(List<Sample> samples, List<int>? removedInputIndices = null)
+    public static List<int> Homogeneous(List<Sample> samples, List<int>? removeInputIndices = null)
     {
         int inputCount = samples[0].input.Length;
         List<int> homogeneousInputIndices = new List<int>();
         for (int inputIndex = 0; inputIndex < inputCount; inputIndex++)
         {
-            if (removedInputIndices != null && removedInputIndices.Contains(inputIndex))
+            if (removeInputIndices != null && removeInputIndices.Contains(inputIndex))
             {
                 continue;
             }
@@ -37,9 +37,9 @@ public static class FeatureReduction
                 homogeneousInputIndices.Add(inputIndex);
             }
         }
-        if (removedInputIndices != null)
+        if (removeInputIndices != null)
         {
-            homogeneousInputIndices = homogeneousInputIndices.Concat(removedInputIndices).OrderBy(index => index).ToList();
+            homogeneousInputIndices = homogeneousInputIndices.Concat(removeInputIndices).OrderBy(index => index).ToList();
         }
         return homogeneousInputIndices;
     }
@@ -455,7 +455,7 @@ public static class Fitness
                 match++;
             }
         }
-        return 1f - (match / samples.Count);
+        return 1f - ((float)match / (float)samples.Count);
     }
 
     public static float RootMeanSquaredError(List<Sample> samples, List<float[]> predictions)
@@ -470,7 +470,7 @@ public static class Fitness
                 sum += MathF.Pow(prediction[outputIndex] - output[outputIndex], 2);
             }
         }
-        return MathF.Sqrt(sum / samples.Count);
+        return MathF.Sqrt(sum / (float)samples.Count);
     }
 
     public static float MeanAbsoluteError(List<Sample> samples, List<float[]> predictions)
@@ -485,29 +485,24 @@ public static class Fitness
                 sum += MathF.Abs(prediction[outputIndex] - output[outputIndex]);
             }
         }
-        return sum / samples.Count;
+        return sum / (float)samples.Count;
     }
 }
 
 public static class Optimize
 {
-    public static (List<int> removedInputIndices, int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? Primary(string filename, List<Sample> samples, Fitness.ErrorFunction errorFunction, int maxK, int maxExponent)
+    public static (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? Primary(string filename, List<Sample> samples, Fitness.ErrorFunction errorFunction, int maxK, int maxExponent)
     {
         // create a best tracker
-        (List<int> removedInputIndices, int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = null;
+        (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = null;
         float bestFitness = float.PositiveInfinity;
 
         // create a log
         TextWriter log = new StreamWriter(filename, append: false);
 
         // writer header
-        log.WriteLine("removedInputIndices,k,normalizeFunction,threshold,exponent,aggregateFunction,fitness");
+        log.WriteLine("k,normalizeFunction,threshold,exponent,aggregateFunction,fitness");
         log.Flush();
-
-        // first we remove any homogeneous inputs
-        List<int> removedInputIndices = FeatureReduction.Homogeneous(samples);
-        samples = FeatureReduction.RemoveIndices(samples, removedInputIndices);
-        string removedInputIndicesString = "[" + string.Join(" ", removedInputIndices) + "]";
 
         // make a list of viable k values
         List<int> ks = Enumerable.Range(1, maxK).ToList();
@@ -593,17 +588,17 @@ public static class Optimize
                             float error = kErrors[kIndex];
 
                             // log
-                            log.WriteLine($"{removedInputIndicesString},{k},{normalization.Method.Name},{threshold},{exponent},{aggregateFunction.Method.Name},{error}");
+                            log.WriteLine($"{k},{normalization.Method.Name},{threshold},{exponent},{aggregateFunction.Method.Name},{error}");
                             log.Flush();
 
                             // console update
-                            Console.WriteLine($"RII: {removedInputIndicesString}, K: {k}, N: {normalization.Method.Name}, T: {threshold}, E: {exponent}, A: {aggregateFunction.Method.Name}, E: {error}");
+                            Console.WriteLine($"K: {k}, N: {normalization.Method.Name}, T: {threshold}, E: {exponent}, A: {aggregateFunction.Method.Name}, E: {error}");
 
                             // if this error is better than best
                             if (error < bestFitness)
                             {
                                 // update best
-                                bestSolution = (removedInputIndices, k, normalization, threshold, exponent, aggregateFunction);
+                                bestSolution = (k, normalization, threshold, exponent, aggregateFunction);
                                 bestFitness = error;
                             }
                         }
@@ -620,6 +615,39 @@ public static class Optimize
     }
 }
 
+public static class Dataset
+{
+    public static List<Sample> ReadMNIST(string filename, int max = -1)
+    {
+        List<Sample> samples = new List<Sample>();
+        string[] lines = File.ReadAllLines(filename);
+        for (int lineIndex = 1; lineIndex < lines.Length; lineIndex++) // skip headers
+        {
+            string line = lines[lineIndex].Trim();
+            if (line.Length == 0)
+            {
+                continue; // skip empty lines
+            }
+            string[] parts = line.Split(',');
+            int labelInt = int.Parse(parts[0]);
+            float[] labelOneHot = new float[10];
+            labelOneHot[labelInt] = 1;
+            float[] input = new float[parts.Length - 1];
+            for (int i = 1; i < parts.Length; i++)
+            {
+                input[i - 1] = float.Parse(parts[i]);
+            }
+            samples.Add(new Sample(input, labelOneHot));
+            if (max != -1 && samples.Count >= max)
+            {
+                break;
+            }
+        }
+        return samples;
+    }
+}
+
+
 public class Program
 {
     public static void Main(string[] args)
@@ -627,7 +655,9 @@ public class Program
         string logFilename = "log.csv";
         int maxK = 25;
         int maxExponent = 25;
-        List<Sample> samples = new List<Sample>();
-        (List<int> removedInputIndices, int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = Optimize.Primary(logFilename, samples, Fitness.ArgmaxMatchError, maxK, maxExponent);
+        List<Sample> samples = Dataset.ReadMNIST("d:/data/mnist_train.csv", max: 1000);
+        List<int> removeInputIndices = FeatureReduction.Homogeneous(samples);
+        samples = FeatureReduction.RemoveIndices(samples, removeInputIndices);
+        (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = Optimize.Primary(logFilename, samples, Fitness.ArgmaxMatchError, maxK, maxExponent);
     }
 }
