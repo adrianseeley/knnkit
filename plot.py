@@ -33,6 +33,9 @@ def plot_knn_heatmaps(csv_file='log.csv', output_file='plot.png'):
 
     for i, k_val in enumerate(unique_k):
         for j, (norm_func, agg_func) in enumerate(unique_approaches):
+            # print progress
+            print(f'Processing k={k_val}, {norm_func}, {agg_func}')
+        
             ax = axes[i, j]
             # Subset data for this k and approach
             sub = df[(df['k'] == k_val) & 

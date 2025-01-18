@@ -259,7 +259,7 @@ public static class Normalize
 
 public static class Threshold
 {
-    public static float[] FindAll(List<Sample> samples)
+    public static float[] FindAll(List<Sample> samples, int maxThresholds = -1)
     {
         int inputCount = samples[0].input.Length;
         HashSet<float> thresholds = new HashSet<float>();
@@ -276,7 +276,15 @@ public static class Threshold
                 }
             }
         }
-        return thresholds.OrderBy(threshold => threshold).ToArray();
+        if (maxThresholds == -1)
+        {
+            return thresholds.OrderBy(threshold => threshold).ToArray();
+        }
+        else
+        {
+            int step = (int)Math.Ceiling((float)thresholds.Count / (float)maxThresholds);
+            return thresholds.OrderBy(threshold => threshold).Where((threshold, index) => index % step == 0).ToArray();
+        }
     }
 }
 
@@ -491,7 +499,7 @@ public static class Fitness
 
 public static class Optimize
 {
-    public static (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? Primary(string filename, List<Sample> samples, Fitness.ErrorFunction errorFunction, int maxK, int maxExponent)
+    public static (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? Primary(string filename, List<Sample> samples, Fitness.ErrorFunction errorFunction, int maxK, int maxExponent, int maxThresholds)
     {
         // create a best tracker
         (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = null;
@@ -517,7 +525,7 @@ public static class Optimize
             List<Sample> nSamples = normalization(samples);
 
             // find all the thresholds (depends on the normalization)
-            float[] thresholds = Threshold.FindAll(nSamples);
+            float[] thresholds = Threshold.FindAll(nSamples, maxThresholds);
 
             // iterate thresholds
             foreach (float threshold in thresholds)
@@ -635,7 +643,7 @@ public static class Dataset
             float[] input = new float[parts.Length - 1];
             for (int i = 1; i < parts.Length; i++)
             {
-                input[i - 1] = float.Parse(parts[i]);
+                input[i - 1] = float.Parse(parts[i]) / 255f;
             }
             samples.Add(new Sample(input, labelOneHot));
             if (max != -1 && samples.Count >= max)
@@ -655,9 +663,10 @@ public class Program
         string logFilename = "log.csv";
         int maxK = 25;
         int maxExponent = 25;
+        int maxThresholds = 25;
         List<Sample> samples = Dataset.ReadMNIST("d:/data/mnist_train.csv", max: 1000);
         List<int> removeInputIndices = FeatureReduction.Homogeneous(samples);
         samples = FeatureReduction.RemoveIndices(samples, removeInputIndices);
-        (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = Optimize.Primary(logFilename, samples, Fitness.ArgmaxMatchError, maxK, maxExponent);
+        (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = Optimize.Primary(logFilename, samples, Fitness.ArgmaxMatchError, maxK, maxExponent, maxThresholds);
     }
 }
