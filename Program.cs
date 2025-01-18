@@ -658,15 +658,18 @@ public static class Dataset
 
 public class Program
 {
+
+
     public static void Main(string[] args)
     {
         string logFilename = "log.csv";
-        int maxK = 25;
-        int maxExponent = 25;
-        int maxThresholds = 25;
+        int k = 8;
+        int exponent = 8;
+
         List<Sample> samples = Dataset.ReadMNIST("d:/data/mnist_train.csv", max: 1000);
         List<int> removeInputIndices = FeatureReduction.Homogeneous(samples);
         samples = FeatureReduction.RemoveIndices(samples, removeInputIndices);
-        (int k, Normalize.NormalizeFunction normalizeFunction, float threshold, float exponent, Aggregate.AggregateFunction aggregateFunction)? bestSolution = Optimize.Primary(logFilename, samples, Fitness.ArgmaxMatchError, maxK, maxExponent, maxThresholds);
+
+
     }
 }
